@@ -109,6 +109,22 @@ class CommandLineInterface:
             default=30,
         )
         self.parser.add_argument(
+            "--websocket-max-message-size",
+            type=int,
+            help="Maximum size, in bytes, of an incoming WebSocket message. "
+            "0 disables the limit (not recommended; allows unauthenticated "
+            "memory exhaustion).",
+            default=1024 * 1024,
+        )
+        self.parser.add_argument(
+            "--websocket-max-frame-size",
+            type=int,
+            help="Maximum size, in bytes, of a single incoming WebSocket frame. "
+            "0 disables the limit (not recommended; allows unauthenticated "
+            "memory exhaustion).",
+            default=1024 * 1024,
+        )
+        self.parser.add_argument(
             "--application-close-timeout",
             type=int,
             help="The number of seconds an ASGI application has to exit after client disconnect before it is killed",
@@ -202,6 +218,12 @@ class CommandLineInterface:
         if args.proxy_headers:
             return "X-Forwarded-Port"
 
+    def load_asgi_app(self, asgi_app_path: str):
+        """
+        Return the imported application.
+        """
+        return import_by_path(asgi_app_path)
+
     def run(self, args):
         """
         Pass in raw argument list and it will decode them
@@ -238,7 +260,7 @@ class CommandLineInterface:
 
         # Import application
         # sys.path.insert(0, ".")  # Custom fork: commented out this line, moved to below
-        application = import_by_path(args.application)
+        application = self.load_asgi_app(args.application)
         application = guarantee_single_callable(application)
 
         # ----- Custom fork code start -----
@@ -294,18 +316,22 @@ class CommandLineInterface:
             websocket_timeout=args.websocket_timeout,
             websocket_connect_timeout=args.websocket_connect_timeout,
             websocket_handshake_timeout=args.websocket_connect_timeout,
+            websocket_max_message_size=args.websocket_max_message_size,
+            websocket_max_frame_size=args.websocket_max_frame_size,
             application_close_timeout=args.application_close_timeout,
-            action_logger=AccessLogGenerator(access_log_stream)
-            if access_log_stream
-            else None,
+            action_logger=(
+                AccessLogGenerator(access_log_stream) if access_log_stream else None
+            ),
             root_path=args.root_path,
             verbosity=args.verbosity,
             proxy_forwarded_address_header=self._get_forwarded_host(args=args),
             proxy_forwarded_port_header=self._get_forwarded_port(args=args),
-            proxy_forwarded_proto_header="X-Forwarded-Proto"
-            if args.proxy_headers
-            else None,
+            proxy_forwarded_proto_header=(
+                "X-Forwarded-Proto" if args.proxy_headers else None
+            ),
             server_name=args.server_name,
             ready_callable=ready_callable,  # Custom fork: make sure we pass ready_callable through
         )
         self.server.run()
+        if self.server.abort_start:
+            exit(1)

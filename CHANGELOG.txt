@@ -1,3 +1,91 @@
+4.2.2 (2026-06-03)
+------------------
+
+* Fixed a denial of service vulnerability via unbounded WebSocket message sizes.
+  Daphne previously passed no message or frame size limits to autobahn,
+  whose defaults are unbounded. This allowed an unauthenticated client
+  to exhaust server memory by sending a very large WebSocket
+  messages/frames (CVE-2026-44545).
+
+  Both limits now default to 1 MiB and can be configured via the new
+  ``--websocket-max-message-size`` and ``--websocket-max-frame-size`` CLI
+  flags (or the matching ``Server`` constructor arguments). Pass ``0`` to
+  restore the previous unlimited behaviour.
+  
+  Thanks to ParkHyunWoo for the report.
+
+* Fixed a header injection vulnerability on the WebSocket upgrade path
+  (CVE-2026-44546).
+
+  Header values containing ``\x0b``, ``\x0c``, ``\x1c``, ``\x1d``, ``\x1e``,
+  or ``\x85`` were parsed as a single header by Twisted but split into
+  multiple headers by autobahn during the WebSocket handshake. An attacker
+  could exploit this parser differential to smuggle additional headers
+  (e.g. authentication tokens, ``X-Forwarded-For``, ``Origin``,
+  ``Daphne-Root-Path``) into the ASGI scope passed to the application.
+
+  Daphne now rejects requests carrying these bytes in any header value with
+  a 400 Bad Request response, as required by RFC 9110 §5.5.
+
+  Thanks to Rene Henningsen for the report.
+
+4.2.1 (2025-07-02)
+------------------
+
+* Fixed a packaging error in 4.2.0.
+
+* Removed --nostatic and --insecure args to runserver command when staticfiles
+  app is not installed.
+
+4.2.0 (2025-05-16)
+------------------
+
+Daphne 4.2 is a maintenance release in the 4.x series.
+
+* Added support for Python 3.13.
+
+* Dropped support for EOL Python 3.8.
+
+* Updated pyupgrade configuration to target Python 3.9.
+
+* Added a `load_asgi_app` hook to CLI class, useful for compiled or frozen
+  applications.
+
+* Allowed assigning a port in the DaphneProcess test helper, useful for live
+  server test cases, such as that provided by Channels.
+
+* Added --nostatic and --insecure args to runserver command to match Django's
+  built-in command.
+
+* Moved metadata to use pyproject.toml.
+
+* Updated sdist file to include tests and changelog.
+
+* Removed unused pytest-runner.
+
+4.1.2 (2024-04-11)
+------------------
+
+* Fixed a setuptools configuration error in 4.1.1.
+
+4.1.1 (2024-04-10)
+------------------
+
+* Fixed a twisted.plugin packaging error in 4.1.0.
+
+  Thanks to sdc50.
+
+4.1.0 (2024-02-10)
+------------------
+
+* Added support for Python 3.12.
+
+* Dropped support for EOL Python 3.7.
+
+* Handled root path for websocket scopes.
+
+* Validate HTTP header names as per RFC 9110.
+
 4.0.0 (2022-10-07)
 ------------------
 

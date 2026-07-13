@@ -18,12 +18,21 @@ class BaseDaphneTestingInstance:
     startup_timeout = 2
 
     def __init__(
-        self, xff=False, http_timeout=None, request_buffer_size=None, *, application
+        self,
+        xff=False,
+        http_timeout=None,
+        request_buffer_size=None,
+        websocket_max_message_size=None,
+        websocket_max_frame_size=None,
+        *,
+        application,
     ):
         self.xff = xff
         self.http_timeout = http_timeout
         self.host = "127.0.0.1"
         self.request_buffer_size = request_buffer_size
+        self.websocket_max_message_size = websocket_max_message_size
+        self.websocket_max_frame_size = websocket_max_frame_size
         self.application = application
 
     def get_application(self):
@@ -41,6 +50,10 @@ class BaseDaphneTestingInstance:
             kwargs["proxy_forwarded_proto_header"] = "X-Forwarded-Proto"
         if self.http_timeout:
             kwargs["http_timeout"] = self.http_timeout
+        if self.websocket_max_message_size is not None:
+            kwargs["websocket_max_message_size"] = self.websocket_max_message_size
+        if self.websocket_max_frame_size is not None:
+            kwargs["websocket_max_frame_size"] = self.websocket_max_frame_size
         # Start up process
         self.process = DaphneProcess(
             host=self.host,
@@ -126,14 +139,16 @@ class DaphneProcess(multiprocessing.Process):
     port it ends up listening on back to the parent process.
     """
 
-    def __init__(self, host, get_application, kwargs=None, setup=None, teardown=None):
+    def __init__(
+        self, host, get_application, kwargs=None, setup=None, teardown=None, port=None
+    ):
         super().__init__()
         self.host = host
         self.get_application = get_application
         self.kwargs = kwargs or {}
         self.setup = setup
         self.teardown = teardown
-        self.port = multiprocessing.Value("i")
+        self.port = multiprocessing.Value("i", port if port is not None else 0)
         self.ready = multiprocessing.Event()
         self.errors = multiprocessing.Queue()
 
@@ -153,12 +168,14 @@ class DaphneProcess(multiprocessing.Process):
 
         try:
             # Create the server class
-            endpoints = build_endpoint_description_strings(host=self.host, port=0)
+            endpoints = build_endpoint_description_strings(
+                host=self.host, port=self.port.value
+            )
             self.server = Server(
                 application=application,
                 endpoints=endpoints,
                 signal_handlers=False,
-                **self.kwargs
+                **self.kwargs,
             )
             # Set up a poller to look for the port
             reactor.callLater(0.1, self.resolve_port)
